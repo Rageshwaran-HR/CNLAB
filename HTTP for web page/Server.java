@@ -1,115 +1,68 @@
 import java.io.*;
 import java.net.*;
 
-public class HTTPServer {
+public class SimpleHTTPFileServer {
 
-  private static final int PORT = 8080; // Port for the server
+  public static void main(String[] args) throws IOException {
+    ServerSocket serverSocket = new ServerSocket(8080);
+    System.out.println("HTTP File Server is running on port 8080...");
 
-  public static void main(String[] args) {
-    try (ServerSocket serverSocket = new ServerSocket(PORT)) {
-      System.out.println("HTTP Server is listening on port " + PORT);
+    while (true) {
+      Socket clientSocket = serverSocket.accept();
+      BufferedReader in = new BufferedReader(
+        new InputStreamReader(clientSocket.getInputStream())
+      );
+      OutputStream out = clientSocket.getOutputStream();
 
-      while (true) {
-        Socket clientSocket = serverSocket.accept();
-        new Thread(new RequestHandler(clientSocket)).start();
-      }
-    } catch (IOException e) {
-      System.out.println("Error in HTTP Server: " + e.getMessage());
-    }
-  }
+      // Read the request line
+      String requestLine = in.readLine();
+      System.out.println("Request: " + requestLine);
 
-  private static class RequestHandler implements Runnable {
+      if (requestLine.startsWith("GET")) {
+        // Serve the requested file for download (e.g., image.jpg)
+        File file = new File("image.jpg"); // Make sure this file exists
+        FileInputStream fis = new FileInputStream(file);
+        byte[] fileData = new byte[(int) file.length()];
 
-    private final Socket clientSocket;
+        fis.read(fileData);
+        fis.close();
 
-    public RequestHandler(Socket clientSocket) {
-      this.clientSocket = clientSocket;
-    }
+        // Send HTTP response header
+        out.write(("HTTP/1.1 200 OK\r\n").getBytes());
+        out.write(("Content-Type: image/jpeg\r\n").getBytes());
+        out.write(("Content-Length: " + fileData.length + "\r\n").getBytes());
+        out.write(("\r\n").getBytes());
 
-    @Override
-    public void run() {
-      try (
-        BufferedReader in = new BufferedReader(
-          new InputStreamReader(clientSocket.getInputStream())
-        );
-        PrintWriter out = new PrintWriter(clientSocket.getOutputStream(), true)
-      ) {
-        String requestLine = in.readLine();
-        System.out.println("Received: " + requestLine);
+        // Send file data
+        out.write(fileData);
+        out.flush();
+      } else if (requestLine.startsWith("POST")) {
+        // Handle file upload (image upload)
+        PrintWriter writer = new PrintWriter(out, true);
 
-        if (requestLine.startsWith("GET")) {
-          handleGetRequest(requestLine, out);
-        } else if (requestLine.startsWith("POST")) {
-          handlePostRequest(in, out);
+        // Skipping headers
+        String line;
+        while (!(line = in.readLine()).isEmpty()) {
+          System.out.println(line);
         }
-      } catch (IOException e) {
-        System.out.println("Error handling request: " + e.getMessage());
-      } finally {
-        try {
-          clientSocket.close();
-        } catch (IOException e) {
-          System.out.println("Error closing socket: " + e.getMessage());
+
+        // Assuming file content comes right after the headers (no multipart/form-data handling in this basic example)
+        FileOutputStream fos = new FileOutputStream("uploaded_image.jpg");
+        byte[] buffer = new byte[1024];
+        int bytesRead;
+        while ((bytesRead = clientSocket.getInputStream().read(buffer)) > 0) {
+          fos.write(buffer, 0, bytesRead);
         }
-      }
-    }
 
-    private void handleGetRequest(String requestLine, PrintWriter out) {
-      String[] requestParts = requestLine.split(" ");
-      String fileName = requestParts[1].substring(1); // Get the requested file name
-      File file = new File(fileName);
-
-      if (file.exists() && !file.isDirectory()) {
-        try {
-          BufferedReader fileReader = new BufferedReader(new FileReader(file));
-          out.println("HTTP/1.1 200 OK");
-          out.println("Content-Type: text/html");
-          out.println("Content-Length: " + file.length());
-          out.println();
-          String line;
-          while ((line = fileReader.readLine()) != null) {
-            out.println(line);
-          }
-          fileReader.close();
-        } catch (IOException e) {
-          out.println("HTTP/1.1 500 Internal Server Error");
-        }
-      } else {
-        out.println("HTTP/1.1 404 Not Found");
-      }
-    }
-
-    private void handlePostRequest(BufferedReader in, PrintWriter out) {
-      String headerLine;
-      StringBuilder body = new StringBuilder();
-      int contentLength = 0;
-
-      // Read headers
-      while (!(headerLine = in.readLine()).isEmpty()) {
-        if (headerLine.startsWith("Content-Length:")) {
-          contentLength = Integer.parseInt(headerLine.split(":")[1].trim());
-        }
+        fos.close();
+        writer.println("HTTP/1.1 200 OK");
+        writer.println("Content-Type: text/html");
+        writer.println();
+        writer.println("<html><body>File uploaded successfully!</body></html>");
+        writer.flush();
       }
 
-      // Read the body
-      char[] buffer = new char[contentLength];
-      try {
-        in.read(buffer, 0, contentLength);
-        body.append(buffer);
-        // Save the uploaded file
-        try (
-          PrintWriter fileWriter = new PrintWriter(
-            new FileWriter("uploaded.html")
-          )
-        ) {
-          fileWriter.write(body.toString());
-        }
-        out.println("HTTP/1.1 200 OK");
-        out.println("Content-Type: text/plain");
-        out.println();
-        out.println("File uploaded successfully.");
-      } catch (IOException e) {
-        out.println("HTTP/1.1 500 Internal Server Error");
-      }
+      clientSocket.close();
     }
   }
 }

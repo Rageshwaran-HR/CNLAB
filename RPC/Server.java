@@ -6,10 +6,8 @@ public class Server {
 
   public static void main(String[] args) {
     try {
-      // Create a remote object instance
       CalculatorImpl calculator = new CalculatorImpl();
 
-      // Bind the remote object to the RMI registry using a specific name
       Naming.rebind("CalculatorService", calculator);
 
       System.out.println("Calculator Service is running...");

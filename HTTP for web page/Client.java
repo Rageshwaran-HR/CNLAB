@@ -1,67 +1,59 @@
 import java.io.*;
 import java.net.*;
-import java.nio.file.Files;
 
-public class HTTPClient {
+public class SimpleHTTPFileClient {
 
-  private static final String SERVER_ADDRESS = "localhost"; // Change to server's IP if needed
-  private static final int SERVER_PORT = 8080;
+  public static void main(String[] args) throws IOException {
+    Socket socket = new Socket("localhost", 8080);
+    OutputStream out = socket.getOutputStream();
+    InputStream in = socket.getInputStream();
 
-  public static void main(String[] args) {
-    // Example of downloading an HTML file
-    String fileToDownload = "index.html"; // Change this to the file you want to download
-    downloadFile(fileToDownload);
+    PrintWriter writer = new PrintWriter(out, true);
+    writer.println("GET / HTTP/1.1");
+    writer.println("Host: localhost");
+    writer.println();
 
-    // Example of uploading an HTML file
-    String fileToUpload = "upload.html"; // Change this to the file you want to upload
-    uploadFile(fileToUpload);
-  }
-
-  public static void downloadFile(String fileName) {
-    try (
-      Socket socket = new Socket(SERVER_ADDRESS, SERVER_PORT);
-      PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
-      BufferedReader in = new BufferedReader(
-        new InputStreamReader(socket.getInputStream())
-      )
-    ) {
-      out.println("GET /" + fileName + " HTTP/1.1");
-      out.println("Host: " + SERVER_ADDRESS);
-      out.println();
-      String responseLine;
-      while ((responseLine = in.readLine()) != null) {
-        System.out.println(responseLine);
-      }
-    } catch (IOException e) {
-      System.out.println("Error in download: " + e.getMessage());
+    // Read the HTTP response and file content
+    BufferedReader reader = new BufferedReader(new InputStreamReader(in));
+    String responseLine;
+    while (!(responseLine = reader.readLine()).isEmpty()) {
+      System.out.println(responseLine);
     }
-  }
 
-  public static void uploadFile(String fileName) {
-    try (
-      Socket socket = new Socket(SERVER_ADDRESS, SERVER_PORT);
-      PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
-      BufferedReader in = new BufferedReader(
-        new InputStreamReader(socket.getInputStream())
-      )
-    ) {
-      String content = new String(
-        Files.readAllBytes(new File(fileName).toPath())
-      );
-      out.println("POST / HTTP/1.1");
-      out.println("Host: " + SERVER_ADDRESS);
-      out.println("Content-Type: text/html");
-      out.println("Content-Length: " + content.length());
-      out.println();
-      out.print(content);
-      out.flush();
-
-      String responseLine;
-      while ((responseLine = in.readLine()) != null) {
-        System.out.println(responseLine);
-      }
-    } catch (IOException e) {
-      System.out.println("Error in upload: " + e.getMessage());
+    // Save the file (image.jpg)
+    FileOutputStream fos = new FileOutputStream("downloaded_image.jpg");
+    byte[] buffer = new byte[1024];
+    int bytesRead;
+    while ((bytesRead = in.read(buffer)) > 0) {
+      fos.write(buffer, 0, bytesRead);
     }
+
+    fos.close();
+
+    // Upload an image (POST request)
+    File file = new File("upload_image.jpg"); // Make sure this file exists
+    FileInputStream fis = new FileInputStream(file);
+    byte[] fileData = new byte[(int) file.length()];
+    fis.read(fileData);
+    fis.close();
+
+    // Sending the POST request
+    PrintWriter writer = new PrintWriter(out, true);
+    writer.println("POST / HTTP/1.1");
+    writer.println("Host: localhost");
+    writer.println("Content-Length: " + fileData.length);
+    writer.println("Content-Type: image/jpeg");
+    writer.println();
+    out.write(fileData);
+    out.flush();
+
+    // Reading the response from the server
+    BufferedReader reader = new BufferedReader(new InputStreamReader(in));
+    String responseLine;
+    while ((responseLine = reader.readLine()) != null) {
+      System.out.println(responseLine);
+    }
+
+    socket.close();
   }
 }
